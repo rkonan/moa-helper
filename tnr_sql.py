@@ -4,7 +4,7 @@
 Les deux SQL doivent contenir le bind :date_arrete.
 La connexion est celle de MOA Helper via data_access.db.get_connection.
 """
-import argparse, csv, math, sys, time
+import argparse, csv, math, re, sys, time
 from collections import Counter
 from datetime import datetime
 from decimal import Decimal
@@ -38,10 +38,23 @@ def load_sql(path):
     s = p.read_text(encoding="utf-8").strip()
     return s[:-1].rstrip() if s.endswith(";") else s
 
+def inject_date(sql, date_arrete):
+    """Remplace uniquement la date de la ligne marquée -- TNR_DATE."""
+    pattern = r"'[^']+'\\s+AS\\s+date_arrete\\s*,?\\s*--\\s*TNR_DATE"
+    replacement = f"'{date_arrete}' AS date_arrete, -- TNR_DATE"
+    new_sql, count = re.subn(pattern, replacement, sql, count=1, flags=re.IGNORECASE)
+    if count != 1:
+        raise ValueError(
+            "Marqueur TNR_DATE introuvable ou ambigu. "
+            "Ajouter dans le CTE arrete : "
+            "'30/11/2025' AS date_arrete, -- TNR_DATE"
+        )
+    return new_sql
+
 def execute(conn, sql, d):
     c = conn.cursor()
     try:
-        c.execute(sql, date_arrete=d)
+        c.execute(inject_date(sql, d))
         return [x[0].upper() for x in c.description], c.fetchall()
     finally:
         c.close()
