@@ -168,7 +168,7 @@ parametrage_cumul AS
 parametrage_majcel_1 AS
 (
     SELECT
-        pcc.code_traitement AS code_traitement,
+        pcc.code_traitement AS code_traitement_1,
         pcc.code_ensemble_val AS code_ensemble_val_1,
         pcc.categorie_valeur AS PRIMITIVE,
         pcc.critere_saisie_1 AS code_tableau_1,
