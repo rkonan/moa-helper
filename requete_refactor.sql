@@ -138,7 +138,7 @@ parametrage_cumul AS
         ON gt1.type_reporting = 'FIXFEE'
         AND gt1.date_arrete = arrete.date_arrete
         AND gt.code_portefeuille = gt1.code_portefeuille
-        AND SUBSTR(gt1.code_tableau, 1, 6) = 'FEE-DP'
+        AND SUBSTR(gt1.code_tableau, 1, 6) = 'FEE-DF'
 
     LEFT JOIN gestion_tableau gt2
         ON gt2.type_reporting = 'FIXFEE'
