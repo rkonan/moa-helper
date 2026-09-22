@@ -386,7 +386,7 @@ postes_fixfee AS
             AND TRIM(SUBSTR(dbf.contenu_poste,1,4)) = TRIM(dp2.categorie_valeur)
     ),
 
-all_balises_fixfee AS -- on recupere pour chaque balise le detail des m
+all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Average Asset utile
     (
         SELECT
             pe.*,
@@ -440,118 +440,37 @@ all_balises_fixfee AS -- on recupere pour chaque balise le detail des m
                 ELSE to_number(REPLACE(REPLACE(trim(pe.montant_detail_standard),',',NULL),'.',','))
             END montant_poste ,
             CASE
-                WHEN cta36.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(cta36.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(cta36.forcage_cellule),',',NULL),'.',','))
-                WHEN cta36.contenu_cellule IS NULL
+                WHEN aa.forcage_cellule != ' '
+                AND LENGTH(trim(TRANSLATE(aa.forcage_cellule,' +-.,1234567890',' '))) IS NULL
+                THEN to_number(REPLACE(REPLACE(trim(aa.forcage_cellule),',',NULL),'.',','))
+                WHEN aa.contenu_cellule IS NULL
                 THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(cta36.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_average_m36 ,
-            CASE
-                WHEN cta12.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(cta12.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(cta12.forcage_cellule),',',NULL),'.',','))
-                WHEN cta12.contenu_cellule IS NULL
-                THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(cta12.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_average_m12
-            --     Average niveau part
-            ,
-            CASE
-                WHEN ctap60.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(ctap60.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(ctap60.forcage_cellule),',',NULL),'.',','))
-                WHEN ctap60.contenu_cellule IS NULL
-                THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(ctap60.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_average_shc_m60 ,
-            CASE
-                WHEN ctap36.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(ctap36.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(ctap36.forcage_cellule),',',NULL),'.',','))
-                WHEN ctap36.contenu_cellule IS NULL
-                THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(ctap36.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_average_shc_m36 ,
-            CASE
-                WHEN ctap12.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(ctap12.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(ctap12.forcage_cellule),',',NULL),'.',','))
-                WHEN ctap12.contenu_cellule IS NULL
-                THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(ctap12.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_average_shc_m12 ,
-            CASE
-                WHEN ctapl.forcage_cellule != ' '
-                AND LENGTH(trim(TRANSLATE(ctapl.forcage_cellule,' +-.,1234567890',' '))) IS NULL
-                THEN to_number(REPLACE(REPLACE(trim(ctapl.forcage_cellule),',',NULL),'.',','))
-                WHEN ctapl.contenu_cellule IS NULL
-                THEN 0
-                ELSE to_number(REPLACE(REPLACE(trim(ctapl.contenu_cellule),',',NULL),'.',','))
-            END AS fixfee_last_shc
+                ELSE to_number(REPLACE(REPLACE(trim(aa.contenu_cellule),',',NULL),'.',','))
+            END AS average_assets
         FROM postes_fixfee pe
-        LEFT JOIN descriptif_tableau dt
-            ON pe.choix_code_tableau = dt.code_tableau
-            --- avrerage assets
-        LEFT JOIN
-            contenu_tableau cta36 --- average asset niveau fond sur 36 mois annualise
-        ON
-            cta36.numero_colonne = 5
-        AND cta36.numero_ligne = 2
-        AND cta36.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = cta36.code_portefeuille
-        AND cta36.type_reporting = pe.type_calcul
-        AND cta36.code_tableau = pe.level_fee_pf
-        LEFT JOIN
-            contenu_tableau cta12 --- average asset niveau fond sur 12 mois annualise
-        ON
-            cta12.type_reporting ='FIXFEE'
-        AND cta12.numero_colonne = 4
-        AND cta12.numero_ligne = 2
-        AND cta12.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = cta12.code_portefeuille
-        AND cta12.type_reporting = pe.type_calcul
-        AND cta12.code_tableau = pe.level_fee_pf
-            --Compartiment
-            --Part
-        LEFT JOIN
-            contenu_tableau ctap60 --- average asset niveau part  sur 60 mois annualise
-        ON
-            ctap60.numero_colonne = 6
-        AND ctap60.numero_ligne = 2
-        AND ctap60.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = ctap60.code_portefeuille
-        AND ctap60.type_reporting = pe.type_calcul
-        AND ctap60.code_tableau = pe.level_fee_pp_shc
-        LEFT JOIN
-            contenu_tableau ctap36 --- average asset niveau part  sur 36  mois annualise
-        ON
-            ctap36.numero_colonne = 5
-        AND ctap36.numero_ligne = 2
-        AND ctap36.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = ctap36.code_portefeuille
-        AND ctap36.type_reporting = pe.type_calcul
-        AND ctap36.code_tableau = pe.level_fee_pp_shc
-        LEFT JOIN
-            contenu_tableau ctap12 --- average asset niveau part  sur 12  mois annualise
-        ON
-            ctap12.numero_colonne = 4
-        AND ctap12.numero_ligne = 2
-        AND ctap12.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = ctap12.code_portefeuille
-        AND ctap12.type_reporting = pe.type_calcul
-        AND ctap12.code_tableau = pe.level_fee_pp_shc
-            --Last Management Fees Base
-        LEFT JOIN
-            contenu_tableau ctapl --- average asset  parametrage a date ou encore Last Management
-            -- Fees Base
-        ON
-            ctapl.numero_colonne = 2
-        AND ctapl.numero_ligne = 7
-        AND ctapl.date_arrete = pe.date_arrete
-        AND pe.code_portefeuille = ctapl.code_portefeuille
-        AND ctapl.type_reporting = pe.type_calcul
-        AND ctapl.code_tableau = pe.level_fee_dp_shc
+        LEFT JOIN contenu_tableau aa
+          ON aa.date_arrete = pe.date_arrete
+         AND aa.code_portefeuille = pe.code_portefeuille
+         AND aa.type_reporting = pe.type_calcul
+         AND aa.numero_ligne =
+             CASE
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN 7
+                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP') THEN 2
+             END
+         AND aa.numero_colonne =
+             CASE
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN 2
+                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
+                  AND pe.identifiant_cumul = 'CHG_INI' THEN 5
+                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
+                  AND pe.identifiant_cumul IN ('CHG_OTH','EMT_OTH','EMT_INI') THEN 4
+             END
+         AND aa.code_tableau =
+             CASE
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN pe.level_fee_dp_shc
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEPF' THEN pe.level_fee_pf
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEPP' THEN pe.level_fee_pp_shc
+             END
     )
     ,
     all_balises_fixfee_with_average_asset AS
@@ -575,37 +494,8 @@ all_balises_fixfee AS -- on recupere pour chaque balise le detail des m
             apm.auto_controle,
             apm.date_cloture_exercice,
             apm.date_ouverture_exercice,
-            CASE
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEDP'
-                THEN apm.fixfee_last_shc
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPF'
-                AND apm.identifiant_cumul ='CHG_INI'
-                THEN apm.fixfee_average_m36
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPF'
-                AND apm.identifiant_cumul ='CHG_OTH'
-                THEN apm.fixfee_average_m12
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPF'
-                AND apm.identifiant_cumul ='EMT_OTH'
-                THEN apm.fixfee_average_m12
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPF'
-                AND apm.identifiant_cumul ='EMT_INI'
-                THEN apm.fixfee_average_m12
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPP'
-                AND apm.identifiant_cumul ='CHG_INI'
-                THEN apm.fixfee_average_shc_m36
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPP'
-                AND apm.identifiant_cumul ='CHG_OTH'
-                THEN apm.fixfee_average_shc_m12
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPP'
-                AND apm.identifiant_cumul ='EMT_OTH'
-                THEN apm.fixfee_average_shc_m12
-                WHEN trim(apm.code_tableau_detail) ='DET-FEEPP'
-                AND apm.identifiant_cumul ='EMT_INI'
-                THEN apm.fixfee_average_shc_m12
-                ELSE 0
-            END AS average_assets
-        FROM
-            all_balises_fixfee apm
+            apm.average_assets
+        FROM all_balises_fixfee apm
     )
     ,
     aa_poste_montant_fixfee AS
@@ -729,31 +619,6 @@ all_balises_fixfee AS -- on recupere pour chaque balise le detail des m
     )
 --select * from   tableau_detail_fixfee ;
     ,
-    group_tab AS
-    (
-        SELECT
-            SUBFUND_CODE,
-            SHC_CODE,
-            FINAL_IDENTIFIER,
-            INTERMEDIARY_IDENTIFIER ,
-            MONTANT_BALISE_CUMUL,
-            auto_controle,
-            SUM(FEE_BALANCE) AS SUM_FEE_BALANCE
-            -- ABS(MONTANT_BALISE_CUMUL) -ABS(SUM(FEE_BALANCE)) as ecart,
-            -- 2*ABS(MONTANT_BALISE_CUMUL) -ABS(SUM(FEE_BALANCE))  as ecart_2
-        FROM
-            tableau_detail_fixfee
-        GROUP BY
-            SUBFUND_CODE,
-            SHC_CODE,
-            FINAL_IDENTIFIER,
-            INTERMEDIARY_IDENTIFIER ,
-            MONTANT_BALISE_CUMUL,
-            auto_controle
-    )
-    --select * from  group_tab; --where abs(ecart) >0.1 and  montant_balise_cumul !=0 ; --and abs
-    -- (ecart_2) >0.1 and montant_balise_cumul !=0;
-    ,
     tableau_detail_fixfee_controle AS
     (
         SELECT
@@ -783,25 +648,37 @@ all_balises_fixfee AS -- on recupere pour chaque balise le detail des m
              END AS INTER_IDENTIFIER_NAME,  
             tdf.CALCULATION_LEVEL,
             tdf.MONTANT_BALISE_CUMUL,
-            gtb.SUM_FEE_BALANCE,
+            SUM(tdf.FEE_BALANCE) OVER (
+                PARTITION BY
+                    tdf.SUBFUND_CODE,
+                    tdf.SHC_CODE,
+                    tdf.FINAL_IDENTIFIER,
+                    tdf.INTERMEDIARY_IDENTIFIER,
+                    tdf.MONTANT_BALISE_CUMUL,
+                    tdf.auto_controle
+            ) AS SUM_FEE_BALANCE,
             CASE
-                WHEN gtb.AUTO_CONTROLE='YES'
+                WHEN tdf.AUTO_CONTROLE='YES'
                 AND TRIM(tdf.INTERMEDIARY_IDENTIFIER) IN ('NEG_INT',
                                                           'SUB_FEES')
                 AND tdf.MONTANT_BALISE_CUMUL !=0
-                AND ABS(ABS(tdf.MONTANT_BALISE_CUMUL) -ABS(gtb.SUM_FEE_BALANCE))>0.1
+                AND ABS(
+                    ABS(tdf.MONTANT_BALISE_CUMUL)
+                    - ABS(SUM(tdf.FEE_BALANCE) OVER (
+                        PARTITION BY
+                            tdf.SUBFUND_CODE,
+                            tdf.SHC_CODE,
+                            tdf.FINAL_IDENTIFIER,
+                            tdf.INTERMEDIARY_IDENTIFIER,
+                            tdf.MONTANT_BALISE_CUMUL,
+                            tdf.auto_controle
+                    ))
+                ) > 0.1
                 THEN 'ERR:MONTANT GLOBAL DIFFERENT SOMME DETAILS'
                 ELSE ''
             END AS LOG_INFO
         FROM
             tableau_detail_fixfee tdf
-        JOIN
-            group_tab gtb
-        ON
-            tdf.SUBFUND_CODE=gtb.SUBFUND_CODE
-        AND tdf.SHC_CODE= gtb.SHC_CODE
-        AND tdf.FINAL_IDENTIFIER = gtb.FINAL_IDENTIFIER
-        AND tdf.INTERMEDIARY_IDENTIFIER = gtb.INTERMEDIARY_IDENTIFIER
     )
 --select * from   tableau_detail_fixfee_controle ;
 SELECT
