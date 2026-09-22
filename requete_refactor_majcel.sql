@@ -118,8 +118,15 @@ tables_fixfee AS
         code_tableau,
         SUBSTR(code_tableau, 1, 6) AS famille_fixfee,
         SUBSTR(code_tableau, 8, 2) AS code_part_fixfee
-    FROM gestion_tableau
-    WHERE type_reporting = 'FIXFEE'
+    FROM gestion_tableau gt
+    WHERE gt.type_reporting = 'FIXFEE'
+      AND EXISTS
+      (
+          SELECT 1
+          FROM contexte_priips cp
+          WHERE cp.code_portefeuille = gt.code_portefeuille
+            AND cp.date_arrete = gt.date_arrete
+      )
 ),
 
 parametrage_cumul AS
