@@ -17,6 +17,23 @@ WITH
             dual
     )
     ,
+    -- Coordonnees techniques des tableaux FIXFEE centralisees ici pour eviter
+    -- les "nombres magiques" disperses dans les jointures.
+    parametrage_coordonnees_fixfee AS
+    (
+        SELECT
+            1 AS col_balise,
+            2 AS col_code_poste_detail,
+            6 AS decalage_montant_detail_standard,
+            3 AS decalage_montant_detail_feedp,
+            2 AS ligne_average_assets,
+            7 AS ligne_last_management_fee_base,
+            4 AS col_average_assets_12m,
+            5 AS col_average_assets_36m,
+            2 AS col_last_management_fee_base
+        FROM dual
+    )
+    ,
     portefeuilles AS -- ensemble de portfeuilles à traiter
     (
         SELECT
@@ -287,9 +304,10 @@ WITH
             dcp.date_cloture_exercice,
             dcp.date_ouverture_exercice
         FROM parametrage_majcel_config pmc
+    CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau ct
             ON ct.type_reporting = pmc.type_calcul
-            AND ct.numero_colonne = 1
+            AND ct.numero_colonne = cfg.col_balise
             AND ct.date_arrete = pmc.date_arrete
             AND ct.code_portefeuille = pmc.code_portefeuille
             AND ct.code_tableau = pmc.choix_code_tableau_fix_fee
@@ -323,6 +341,7 @@ WITH
             ct.numero_colonne AS balise_numero_colonne,
             jt.numero_ligne_detail
         FROM parametrage_majcel pe
+        CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau ct
             ON pe.type_calcul = ct.type_reporting
             AND pe.date_arrete = ct.date_arrete
@@ -347,27 +366,28 @@ detail_balises_fixfee AS
             ctd2.contenu_cellule AS montant_detail_standard,
             ctd3.contenu_cellule AS montant_detail_feedp
         FROM balises_fixfee bf
+        CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau_detail ctd
             ON bf.type_calcul = ctd.type_reporting
             AND bf.date_arrete = ctd.date_arrete
             AND bf.code_portefeuille = ctd.code_portefeuille
             AND bf.code_tableau_detail = ctd.code_tableau_detail
             AND bf.numero_ligne_detail = ctd.numero_ligne_detail
-            AND ctd.numero_colonne_detail = 2
+            AND ctd.numero_colonne_detail = cfg.col_code_poste_detail
         LEFT JOIN contenu_tableau_detail ctd2
             ON bf.type_calcul = ctd2.type_reporting
             AND bf.date_arrete = ctd2.date_arrete
             AND bf.code_portefeuille = ctd2.code_portefeuille
             AND bf.code_tableau_detail = ctd2.code_tableau_detail
             AND bf.numero_ligne_detail = ctd2.numero_ligne_detail
-            AND ctd2.numero_colonne_detail = bf.balise_numero_colonne + 6
+            AND ctd2.numero_colonne_detail = bf.balise_numero_colonne + cfg.decalage_montant_detail_standard
         LEFT JOIN contenu_tableau_detail ctd3
             ON bf.type_calcul = ctd3.type_reporting
             AND bf.date_arrete = ctd3.date_arrete
             AND bf.code_portefeuille = ctd3.code_portefeuille
             AND bf.code_tableau_detail = ctd3.code_tableau_detail
             AND bf.numero_ligne_detail = ctd3.numero_ligne_detail
-            AND ctd3.numero_colonne_detail = bf.balise_numero_colonne + 3
+            AND ctd3.numero_colonne_detail = bf.balise_numero_colonne + cfg.decalage_montant_detail_feedp
     ),
 
 postes_fixfee AS
@@ -448,22 +468,23 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
                 ELSE to_number(REPLACE(REPLACE(trim(aa.contenu_cellule),',',NULL),'.',','))
             END AS average_assets
         FROM postes_fixfee pe
+        CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau aa
           ON aa.date_arrete = pe.date_arrete
          AND aa.code_portefeuille = pe.code_portefeuille
          AND aa.type_reporting = pe.type_calcul
          AND aa.numero_ligne =
              CASE
-                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN 7
-                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP') THEN 2
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN cfg.ligne_last_management_fee_base
+                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP') THEN cfg.ligne_average_assets
              END
          AND aa.numero_colonne =
              CASE
-                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN 2
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN cfg.col_last_management_fee_base
                  WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
-                  AND pe.identifiant_cumul = 'CHG_INI' THEN 5
+                  AND pe.identifiant_cumul = 'CHG_INI' THEN cfg.col_average_assets_36m
                  WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
-                  AND pe.identifiant_cumul IN ('CHG_OTH','EMT_OTH','EMT_INI') THEN 4
+                  AND pe.identifiant_cumul IN ('CHG_OTH','EMT_OTH','EMT_INI') THEN cfg.col_average_assets_12m
              END
          AND aa.code_tableau =
              CASE
