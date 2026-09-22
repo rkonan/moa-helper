@@ -4,7 +4,7 @@
 Les deux SQL doivent contenir le bind :date_arrete.
 La connexion est celle de MOA Helper via data_access.db.get_connection.
 """
-import argparse, csv, math, re, sys, time
+import argparse, csv, hashlib, math, pickle, re, sys, time
 from collections import Counter
 from datetime import datetime
 from decimal import Decimal
@@ -27,6 +27,11 @@ def args():
     p.add_argument("--output", "-o", default=DEFAULT_OUTPUT)
     p.add_argument("--dates", nargs="+", default=DEFAULT_DATES)
     p.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE)
+    p.add_argument(
+        "--cache",
+        action="store_true",
+        help="Réutilise le cache de la requête OLD. Sans cette option, OLD est exécutée et le cache est reconstruit."
+    )
     return p.parse_args()
 
 def emit(s, report):
@@ -40,7 +45,7 @@ def load_sql(path):
 
 def inject_date(sql, date_arrete):
     """Remplace uniquement la date de la ligne marquée -- TNR_DATE."""
-    pattern = r"'[^']+'\\s+AS\\s+date_arrete\\s*,?\\s*--\\s*TNR_DATE"
+    pattern = r"'[^']+'\s+AS\s+date_arrete\s*,?\s*--\s*TNR_DATE"
     replacement = f"'{date_arrete}' AS date_arrete, -- TNR_DATE"
     new_sql, count = re.subn(pattern, replacement, sql, count=1, flags=re.IGNORECASE)
     if count != 1:
@@ -58,6 +63,54 @@ def execute(conn, sql, d):
         return [x[0].upper() for x in c.description], c.fetchall()
     finally:
         c.close()
+
+def sql_hash(sql):
+    """Empreinte de la requête OLD ayant produit le cache."""
+    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
+
+def cache_path(output_dir, env, date_arrete):
+    safe_env = re.sub(r"[^A-Za-z0-9_.-]+", "_", env)
+    safe_date = date_arrete.replace("/", "-")
+    return Path(output_dir) / "cache" / safe_env / f"{safe_date}.pkl"
+
+def save_old_cache(path, env, date_arrete, old_sql, columns, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "env": env,
+        "date_arrete": date_arrete,
+        "old_sql_sha256": sql_hash(old_sql),
+        "columns": columns,
+        "rows": rows,
+    }
+    with path.open("wb") as fh:
+        pickle.dump(payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+def load_old_cache(path, env, date_arrete, old_sql):
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Cache OLD introuvable pour {date_arrete} : {path}. "
+            "Relancer sans --cache pour le construire."
+        )
+    with path.open("rb") as fh:
+        payload = pickle.load(fh)
+
+    if payload.get("version") != 1:
+        raise ValueError(f"Version de cache non supportée : {path}")
+    if payload.get("env") != env:
+        raise ValueError(
+            f"Cache incompatible : environnement {payload.get('env')} au lieu de {env}."
+        )
+    if payload.get("date_arrete") != date_arrete:
+        raise ValueError(
+            f"Cache incompatible : date {payload.get('date_arrete')} au lieu de {date_arrete}."
+        )
+    if payload.get("old_sql_sha256") != sql_hash(old_sql):
+        raise ValueError(
+            "Cache incompatible : la requête OLD a changé depuis la génération du cache. "
+            "Relancer sans --cache."
+        )
+    return payload["columns"], payload["rows"]
 
 def canon(v, tol):
     if v is None: return NULL_TOKEN
@@ -107,12 +160,19 @@ def main():
         emit(f"Sortie              : {out.resolve()}",report)
         emit(f"Dates               : {', '.join(a.dates)}",report)
         emit(f"Tolérance numérique: {a.tolerance}",report)
+        emit(f"Cache OLD           : {'UTILISE' if a.cache else 'RECONSTRUIT'}",report)
         emit("Connexion...",report); conn=get_connection(a.env); emit("Connexion OK",report)
         try:
             for d in a.dates:
                 emit("\n"+"-"*78,report); emit(f"DATE D'ARRÊTÉ : {d}",report)
-                t=time.perf_counter(); oc,old=execute(conn,old_sql,d); ot=time.perf_counter()-t
-                emit(f"ORIGINAL : {len(old):>8} lignes - {ot:.2f} s",report)
+                cp=cache_path(out,a.env,d)
+                if a.cache:
+                    t=time.perf_counter(); oc,old=load_old_cache(cp,a.env,d,old_sql); ot=time.perf_counter()-t
+                    emit(f"ORIGINAL : {len(old):>8} lignes - CACHE ({ot:.3f} s)",report)
+                else:
+                    t=time.perf_counter(); oc,old=execute(conn,old_sql,d); ot=time.perf_counter()-t
+                    save_old_cache(cp,a.env,d,old_sql,oc,old)
+                    emit(f"ORIGINAL : {len(old):>8} lignes - {ot:.2f} s - CACHE MIS A JOUR",report)
                 t=time.perf_counter(); nc,new=execute(conn,new_sql,d); nt=time.perf_counter()-t
                 emit(f"REFACTOR : {len(new):>8} lignes - {nt:.2f} s",report)
                 r=compare(oc,old,nc,new,a.tolerance)
