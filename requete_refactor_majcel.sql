@@ -142,7 +142,7 @@ parametrage_cumul AS
     LEFT JOIN tables_fixfee gt1
         ON gt1.code_portefeuille = cp.code_portefeuille
         AND gt1.date_arrete = cp.date_arrete
-        AND gt1.famille_fixfee = 'FEE-DP'
+        AND gt1.famille_fixfee = 'FEE-DF'
     LEFT JOIN tables_fixfee gt2
         ON gt2.code_portefeuille = cp.code_portefeuille
         AND gt2.date_arrete = cp.date_arrete
