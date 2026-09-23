@@ -366,7 +366,6 @@ detail_balises_fixfee AS
             ctd2.contenu_cellule AS montant_detail_standard,
             ctd3.contenu_cellule AS montant_detail_feedp
         FROM balises_fixfee bf
-        CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau_detail ctd
             ON bf.type_calcul = ctd.type_reporting
             AND bf.date_arrete = ctd.date_arrete
@@ -468,7 +467,6 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
                 ELSE to_number(REPLACE(REPLACE(trim(aa.contenu_cellule),',',NULL),'.',','))
             END AS average_assets
         FROM postes_fixfee pe
-        CROSS JOIN parametrage_coordonnees_fixfee cfg
         LEFT JOIN contenu_tableau aa
           ON aa.date_arrete = pe.date_arrete
          AND aa.code_portefeuille = pe.code_portefeuille
