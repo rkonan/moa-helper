@@ -372,21 +372,21 @@ detail_balises_fixfee AS
             AND bf.code_portefeuille = ctd.code_portefeuille
             AND bf.code_tableau_detail = ctd.code_tableau_detail
             AND bf.numero_ligne_detail = ctd.numero_ligne_detail
-            AND ctd.numero_colonne_detail = cfg.col_code_poste_detail
+            AND ctd.numero_colonne_detail = bf.col_code_poste_detail
         LEFT JOIN contenu_tableau_detail ctd2
             ON bf.type_calcul = ctd2.type_reporting
             AND bf.date_arrete = ctd2.date_arrete
             AND bf.code_portefeuille = ctd2.code_portefeuille
             AND bf.code_tableau_detail = ctd2.code_tableau_detail
             AND bf.numero_ligne_detail = ctd2.numero_ligne_detail
-            AND ctd2.numero_colonne_detail = bf.balise_numero_colonne + cfg.decalage_montant_detail_standard
+            AND ctd2.numero_colonne_detail = bf.balise_numero_colonne + bf.decalage_montant_detail_standard
         LEFT JOIN contenu_tableau_detail ctd3
             ON bf.type_calcul = ctd3.type_reporting
             AND bf.date_arrete = ctd3.date_arrete
             AND bf.code_portefeuille = ctd3.code_portefeuille
             AND bf.code_tableau_detail = ctd3.code_tableau_detail
             AND bf.numero_ligne_detail = ctd3.numero_ligne_detail
-            AND ctd3.numero_colonne_detail = bf.balise_numero_colonne + cfg.decalage_montant_detail_feedp
+            AND ctd3.numero_colonne_detail = bf.balise_numero_colonne + bf.decalage_montant_detail_feedp
     ),
 
 postes_fixfee AS
@@ -473,16 +473,16 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
          AND aa.type_reporting = pe.type_calcul
          AND aa.numero_ligne =
              CASE
-                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN cfg.ligne_last_management_fee_base
-                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP') THEN cfg.ligne_average_assets
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN pe.ligne_last_management_fee_base
+                 WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP') THEN pe.ligne_average_assets
              END
          AND aa.numero_colonne =
              CASE
-                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN cfg.col_last_management_fee_base
+                 WHEN trim(pe.code_tableau_detail) = 'DET-FEEDP' THEN pe.col_last_management_fee_base
                  WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
-                  AND pe.identifiant_cumul = 'CHG_INI' THEN cfg.col_average_assets_36m
+                  AND pe.identifiant_cumul = 'CHG_INI' THEN pe.col_average_assets_36m
                  WHEN trim(pe.code_tableau_detail) IN ('DET-FEEPF','DET-FEEPP')
-                  AND pe.identifiant_cumul IN ('CHG_OTH','EMT_OTH','EMT_INI') THEN cfg.col_average_assets_12m
+                  AND pe.identifiant_cumul IN ('CHG_OTH','EMT_OTH','EMT_INI') THEN pe.col_average_assets_12m
              END
          AND aa.code_tableau =
              CASE
