@@ -66,8 +66,10 @@ WITH
            -- CODE_PORTEFEUILLE IN ('306','050036')
     )
     ,
-    parametrage_cumul_1 AS -- On recupere le parametrage des balises (CHG_INI,CHG_OTH,EMT_OTH,
-    -- EMT_INI)
+    /* MOA - Perimetre fonctionnel des cumuls PRIIPS a restituer.
+       FCEL relie le cumul de reporting (CHG/EMT) au parametrage qui permettra
+       ensuite de retrouver les balises FIXFEE contribuant a ce cumul. */
+    parametrage_cumul_1 AS
     (
         SELECT
             cr.*,
@@ -96,7 +98,10 @@ WITH
     )
     --select * from parametrage_cumul_1;
     ,
-    -- Le contexte PRIIPS est isolé des tables FIXFEE.
+    /* MOA - Contexte de traitement.
+       Une ligne represente un portefeuille / une part / une date d'arrete PRIIPS.
+       Ce CTE constitue le point de depart fonctionnel avant de rechercher les
+       tableaux de frais FIXFEE correspondants. */
     contexte_priips AS
     (
         SELECT
@@ -121,9 +126,13 @@ WITH
             AND gt.type_reporting = ac.type_reporting
         WHERE gt.type_reporting = 'PRIIPS'
     ),
-    -- Une seule lecture logique de GESTION_TABLEAU pour les quatre familles FIXFEE.
-    -- On conserve volontairement les mêmes règles de correspondance que la requête
-    -- d'origine, y compris FEE-DP pour level_fee_df.
+    /* MOA - Inventaire des tables physiques FIXFEE disponibles pour le contexte PRIIPS.
+       Les familles correspondent au niveau de calcul documente NeoXam :
+         FEE-DF : frais en fin de periode - portefeuille
+         FEE-PF : frais sur periodes       - portefeuille
+         FEE-DP : frais en fin de periode - part
+         FEE-PP : frais sur periodes       - part
+       Les SUBSTR ci-dessous ne servent qu'a decoder la nomenclature GP des tables. */
     tables_fixfee AS
     (
         SELECT
@@ -142,6 +151,9 @@ WITH
             
         )
     ),
+    /* MOA - Choix des tables FIXFEE a utiliser pour chaque portefeuille/part.
+       On rattache au contexte PRIIPS les quatre niveaux de calcul possibles.
+       Les colonnes level_fee_* contiennent les vrais codes de tables GP a lire. */
     parametrage_cumul AS -- on recupere pour chaque portefeuille,
     (
         SELECT
@@ -191,7 +203,11 @@ WITH
         AND cp.code_part = gt4.code_part_fixfee
     )
     ,
-    -- MAJCEL choisit d'abord UNE table physique FIXFEE.
+    /* MOA - Interpretation du parametrage MAJCEL.
+       PCC indique, pour chaque primitive/balise, dans quelle famille FIXFEE et
+       dans quelle colonne se trouve le montant. On traduit ici la famille
+       logique (FEE-PF, FEEDP*, FEEPP*) vers la table physique du portefeuille.
+       SWING_COST est traite a part car il n'a pas de tableau de detail. */
     parametrage_majcel_config AS
     (
         SELECT
@@ -270,7 +286,10 @@ WITH
         AND db2.langue_traduction='FRA'
         
     ),
-    -- Une fois la table choisie, une seule jointure suffit pour localiser la balise.
+    /* MOA - Localisation de la balise dans CONTENU_TABLEAU.
+       La colonne 1 porte la balise ; sa ligne devient numero_ligne_ct.
+       code_tableau_detail donne ensuite le niveau de detail a parcourir.
+       niveau_calcul traduit les codes DET-* en libelles fonctionnels MOA. */
     parametrage_majcel AS
     (
         SELECT
@@ -332,6 +351,9 @@ WITH
         
     ),
 
+    /* MOA - Lecture du montant global de la balise.
+       A ce stade on connait la table, la ligne de la balise et la colonne du cumul.
+       JUSTIFICATIF_TABLEAU fournit numero_ligne_detail, passerelle vers le detail. */
     balises_fixfee AS
     (
         SELECT
@@ -358,6 +380,11 @@ WITH
             AND pe.choix_colonne_ct_fixfee = ct.numero_colonne
     ),
 
+/* MOA - Lecture des lignes du tableau detaille.
+   - contenu_poste : cellule permettant d'identifier le poste de frais ;
+   - montant_detail_standard : montant du detail selon la structure standard ;
+   - montant_detail_feedp : variante utilisee pour le cas DET-FEEDP.
+   Les numeros/offsets de colonnes sont centralises dans le CTE de coordonnees. */
 detail_balises_fixfee AS
     (
         SELECT
@@ -389,6 +416,10 @@ detail_balises_fixfee AS
             AND ctd3.numero_colonne_detail = bf.balise_numero_colonne + bf.decalage_montant_detail_feedp
     ),
 
+/* MOA - Rattachement du detail au referentiel des postes de frais.
+   Le contenu GP n'est pas stocke sous une cle directement exploitable : les REGEXP
+   extraient le code valeur. dp2 ajoute la categorie pour lever les ambiguites
+   lorsque le meme code valeur existe dans plusieurs categories. */
 postes_fixfee AS
     (
         SELECT
@@ -405,7 +436,14 @@ postes_fixfee AS
             AND TRIM(SUBSTR(dbf.contenu_poste,1,4)) = TRIM(dp2.categorie_valeur)
     ),
 
-all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Average Asset utile
+/* MOA - Construction du montant de frais et de la base de calcul.
+   montant_balise_cumul = montant global porte par la balise dans le tableau principal.
+   montant_poste        = montant d'une ligne de detail/poste de frais.
+   average_assets       = assiette utilisee pour convertir le montant en taux.
+   Les forcages GP sont prioritaires lorsqu'ils contiennent une valeur numerique.
+   Pour FEE-PF/FEE-PP, la documentation NeoXam identifie notamment R12M en colonne 4
+   et R36M en colonne 5 ; DET-FEEDP suit une regle specifique. */
+all_balises_fixfee AS
     (
         SELECT
             pe.*,
@@ -517,6 +555,9 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
         FROM all_balises_fixfee apm
     )
     ,
+    /* MOA - Agregation au niveau du poste de frais.
+       Plusieurs lignes de detail peuvent contribuer au meme poste : elles sont
+       sommees ici pour produire FEE_BALANCE. SUB_FEES est restitue avec signe inverse. */
     aa_poste_montant_fixfee AS
     (
         SELECT
@@ -568,6 +609,9 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
             auto_controle
     )
     ,
+    /* MOA - Mise en forme du fichier de restitution.
+       EXPOST concerne EMT_OTH/EMT_INI ; EXANTE concerne CHG_INI/CHG_OTH.
+       Le taux est FEE_BALANCE / average_assets * 100. */
     tableau_detail_fixfee_1 AS
     (
         SELECT
@@ -623,6 +667,9 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
     )
 --select * from  tableau_detail_fixfee_1;
     ,
+    /* MOA - Filtre fonctionnel final.
+       Les cumuls ex-post EMT ne sont restitues qu'en calcul non estime.
+       Les cumuls ex-ante CHG restent restitues independamment de CALCUL_ESTIME. */
     tableau_detail_fixfee AS
     (
         SELECT
@@ -638,6 +685,10 @@ all_balises_fixfee AS -- detail des balises/postes + selection directe de l'Aver
     )
 --select * from   tableau_detail_fixfee ;
     ,
+    /* MOA - Controle de coherence global/detail.
+       La somme analytique conserve chaque ligne de poste tout en calculant la somme
+       des details de la balise. Pour NEG_INT et SUB_FEES, si l'auto-controle est actif,
+       un ecart > 0,1 entre montant global et somme des details est signale. */
     tableau_detail_fixfee_controle AS
     (
         SELECT
