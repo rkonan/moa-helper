@@ -1054,6 +1054,19 @@ tableau_detail_fixfee_controle AS
         AND tdf.INTERMEDIARY_IDENTIFIER = gtb.INTERMEDIARY_IDENTIFIER
 )
 --select * from tableau_detail_fixfee_controle ;
+,
+-- Contrôle bloquant de la restitution :
+-- - aucune anomalie : restitution normale ;
+-- - au moins une anomalie : aucune donnée métier n'est envoyée et une seule
+--   ligne d'erreur est produite en conservant exactement le format attendu.
+anomalies_autocontrole AS
+(
+    SELECT
+        COUNT(*) AS nb_anomalies
+    FROM tableau_detail_fixfee_controle
+    WHERE LOG_INFO IS NOT NULL
+      AND TRIM(LOG_INFO) <> ''
+)
 SELECT
     tdf.SUBFUND_CODE,
     tdf.SHC_CODE,
@@ -1069,7 +1082,31 @@ SELECT
     tdf.FINAL_IDENTIFIER,
     tdf.FINAL_IDENTIFIER_NAME,
     tdf.INTERMEDIARY_IDENTIFIER,
-    REGEXP_REPLACE(tdf.INTER_IDENTIFIER_NAME, '^\-', '') AS INTER_IDENTIFIER_NAME,
+    REGEXP_REPLACE(tdf.INTER_IDENTIFIER_NAME, '^\\-', '') AS INTER_IDENTIFIER_NAME,
     tdf.CALCULATION_LEVEL
-FROM
-    tableau_detail_fixfee_controle tdf;
+FROM tableau_detail_fixfee_controle tdf
+CROSS JOIN anomalies_autocontrole ac
+WHERE ac.nb_anomalies = 0
+
+UNION ALL
+
+SELECT
+    'ERROR'                                      AS SUBFUND_CODE,
+    ' '                                          AS SHC_CODE,
+    ' '                                          AS SHC_ISIN,
+    arrete.date_arrete                           AS REPORTING_DATE,
+    ' '                                          AS FEE_CODE,
+    'AUTOCONTROLE KO - VERIFIER LES INCOHERENCES' AS FEE_NAME,
+    0                                            AS AVERAGE_ASSETS,
+    0                                            AS FEE_BALANCE,
+    ' '                                          AS SUBFUND_CURRENCY,
+    ' '                                          AS EXPOST,
+    ' '                                          AS EXANTE,
+    'ERROR'                                      AS FINAL_IDENTIFIER,
+    'RESTITUTION BLOQUEE'                        AS FINAL_IDENTIFIER_NAME,
+    'AUTOCONTROLE'                               AS INTERMEDIARY_IDENTIFIER,
+    'MONTANT GLOBAL DIFFERENT SOMME DETAILS'     AS INTER_IDENTIFIER_NAME,
+    ' '                                          AS CALCULATION_LEVEL
+FROM arrete
+CROSS JOIN anomalies_autocontrole ac
+WHERE ac.nb_anomalies > 0;
