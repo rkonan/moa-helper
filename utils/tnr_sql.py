@@ -44,15 +44,32 @@ def load_sql(path):
     return s[:-1].rstrip() if s.endswith(";") else s
 
 def inject_date(sql, date_arrete):
-    """Remplace uniquement la date de la ligne marquée -- TNR_DATE."""
-    pattern = r"'[^']+'\s+AS\s+date_arrete\s*,?\s*--\s*TNR_DATE"
-    replacement = f"'{date_arrete}' AS date_arrete, -- TNR_DATE"
-    new_sql, count = re.subn(pattern, replacement, sql, count=1, flags=re.IGNORECASE)
+    """Remplace uniquement la date de la ligne marquée -- TNR_DATE.
+
+    Conserve la virgule éventuelle après date_arrete afin de gérer les deux
+    formes de CTE : date_arrete seule ou suivie d'une autre colonne.
+    """
+    pattern = (
+        r"'[^']+'\\s+AS\\s+date_arrete"
+        r"(?P<comma>\\s*,)?"
+        r"\\s*--\\s*TNR_DATE"
+    )
+
+    def replacement(match):
+        comma = "," if match.group("comma") else ""
+        return f"'{date_arrete}' AS date_arrete{comma} -- TNR_DATE"
+
+    new_sql, count = re.subn(
+        pattern,
+        replacement,
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
     if count != 1:
         raise ValueError(
             "Marqueur TNR_DATE introuvable ou ambigu. "
-            "Ajouter dans le CTE arrete : "
-            "'30/11/2025' AS date_arrete, -- TNR_DATE"
+            "Ajouter -- TNR_DATE sur la ligne date_arrete."
         )
     return new_sql
 
