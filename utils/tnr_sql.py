@@ -51,7 +51,7 @@ def inject_date(sql, date_arrete):
     """
     pattern = (
         r"'[^']+'"
-        r"(?=\\s+AS\\s+date_arrete\\s*,?\\s*--\\s*TNR_DATE)"
+        r"(?=\s+AS\s+date_arrete\s*,?\s*--\s*TNR_DATE)"
     )
 
     replacement = f"'{date_arrete}'"
