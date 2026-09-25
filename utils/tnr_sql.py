@@ -46,18 +46,15 @@ def load_sql(path):
 def inject_date(sql, date_arrete):
     """Remplace uniquement la date de la ligne marquée -- TNR_DATE.
 
-    Conserve la virgule éventuelle après date_arrete afin de gérer les deux
-    formes de CTE : date_arrete seule ou suivie d'une autre colonne.
+    La ponctuation qui suit date_arrete (virgule éventuelle) n'est jamais
+    modifiée : l'injecteur remplace uniquement la valeur entre quotes.
     """
     pattern = (
-        r"'[^']+'\\s+AS\\s+date_arrete"
-        r"(?P<comma>\\s*,)?"
-        r"\\s*--\\s*TNR_DATE"
+        r"'[^']+'"
+        r"(?=\\s+AS\\s+date_arrete\\s*,?\\s*--\\s*TNR_DATE)"
     )
 
-    def replacement(match):
-        comma = "," if match.group("comma") else ""
-        return f"'{date_arrete}' AS date_arrete{comma} -- TNR_DATE"
+    replacement = f"'{date_arrete}'"
 
     new_sql, count = re.subn(
         pattern,
@@ -68,8 +65,7 @@ def inject_date(sql, date_arrete):
     )
     if count != 1:
         raise ValueError(
-            "Marqueur TNR_DATE introuvable ou ambigu. "
-            "Ajouter -- TNR_DATE sur la ligne date_arrete."
+            "Marqueur TNR_DATE introuvable ou ambigu."
         )
     return new_sql
 
