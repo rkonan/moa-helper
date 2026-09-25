@@ -34,6 +34,35 @@ WITH
         FROM dual
     )
     ,
+    /* Referentiel local des balises FIXFEE retenues par la restitution.
+       type_restitution permet de centraliser les traitements particuliers
+       et d'eviter de dupliquer les listes de balises dans les CASE. */
+    parametrage_balises_fixfee AS
+    (
+        SELECT 'MGTF_EXA'   AS balise, 'STANDARD'      AS type_restitution FROM dual UNION ALL
+        SELECT 'DISF_EXA',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'DISF_EXP',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'MGTF_EXP',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'NEG_INT',              'STANDARD'                           FROM dual UNION ALL
+        SELECT 'OTH_EXP',              'STANDARD'                           FROM dual UNION ALL
+        SELECT 'REV_ROPC',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'SUB_FEES',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'SWING_COST',           'SWING_COST'                         FROM dual UNION ALL
+        SELECT 'TRF_BRO',              'STANDARD'                           FROM dual UNION ALL
+        SELECT 'TRF_COA',              'STANDARD'                           FROM dual UNION ALL
+        SELECT 'TRF_RSCH',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'TRF_TAX',              'STANDARD'                           FROM dual UNION ALL
+        SELECT 'INDI_EXP',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'TF_AFEES_8',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'TF_AFEES_0',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'TF_AF_TC_8',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'TF_AF_PF_8',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'TF_AF_TC_0',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'TF_AF_PF_0',           'COUTS_INDUITS'                      FROM dual UNION ALL
+        SELECT 'CUST_EXP',             'STANDARD'                           FROM dual UNION ALL
+        SELECT 'CUST_EXA',             'STANDARD'                           FROM dual
+    )
+    ,
     portefeuilles AS -- ensemble de portfeuilles à traiter
     (
         SELECT
@@ -241,6 +270,7 @@ WITH
                 
             END                  AS choix_code_tableau_fix_fee ,
             pcc.critere_saisie_2 AS balise_fixfee ,
+            pb.type_restitution AS type_restitution_balise,
             CASE
                 WHEN trim(db.libelle_balise) IS NULL
                 THEN trim(db2.libelle_balise)
@@ -256,24 +286,8 @@ WITH
             TRIM(pcc.categorie_valeur)=TRIM(pc.VALEUR_PAR_DEFAUT)
         AND pcc.code_traitement='MAJCEL'
         AND pcc.CODE_ENSEMBLE_VAL='FIXFEE'
-        AND pcc.critere_saisie_2 IN ('MGTF_EXA',
-                                     'DISF_EXA',
-                                     'DISF_EXP',
-                                     'MGTF_EXP',
-                                     'NEG_INT',
-                                     'OTH_EXP',
-                                     'REV_ROPC',
-                                     'SUB_FEES',
-                                     'SWING_COST',
-                                     'TRF_BRO',
-                                     'TRF_COA',
-                                     'TRF_RSCH',
-                                     'TRF_TAX',
-                                     'INDI_EXP',
-                                     'TF_AFEES_8',
-                                     'TF_AFEES_0',
-                                     'CUST_EXP',
-                                     'CUST_EXA')
+        JOIN parametrage_balises_fixfee pb
+        ON TRIM(pcc.critere_saisie_2) = pb.balise
         LEFT JOIN
             --tra_descriptif_balise db
             descriptif_balise db
@@ -448,7 +462,7 @@ all_balises_fixfee AS
         SELECT
             pe.*,
             CASE
-                WHEN trim(pe.BALISE_FIXFEE) in ('TF_AFEES_8','TF_AFEES_0')
+                WHEN pe.type_restitution_balise = 'COUTS_INDUITS'
                 THEN 'COUTS_INDUITS'
                 WHEN trim(pe.BALISE_FIXFEE)='SWING_COST'
                 THEN 'SWING_COST'
@@ -457,7 +471,7 @@ all_balises_fixfee AS
                 ELSE pe.dp_code_valeur
             END AS code_poste , ---
             CASE
-                WHEN trim(pe.BALISE_FIXFEE) in ('TF_AFEES_8','TF_AFEES_0')
+                WHEN pe.type_restitution_balise = 'COUTS_INDUITS'
                 THEN 'COUTS INDUITS'
                 WHEN trim(pe.BALISE_FIXFEE)='SWING_COST'
                 THEN 'SWING COST'
