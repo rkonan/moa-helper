@@ -1,3 +1,5 @@
+python -c "p=r'sql/Amundi_Frais_detaille_GPC_refactor.sql'; b=open(p,'rb').read(); pos=1418; print('Ligne:', b[:pos].count(b'\n')+1); print('Contenu:', b.splitlines()[b[:pos].count(b'\n')].decode('cp1252'))"
+
 # MOA Helper
 
 Outils et requêtes MOA autour de GP / FIXFEE / PRIIPS.
